@@ -21,7 +21,12 @@ Do not change clinical behavior without either matching the spec or writing an A
 
 - Board: Waveshare ESP32-P4-WIFI6-Touch-LCD-5 (not yet in hand)
   - ESP32-P4 dual-core, up to 360 MHz; 32 MB flash, 32 MB PSRAM
-  - Display: 5", 720x1280, capacitive touch (GT911), 5-point
+  - Display: 5", 720x1280 portrait-native, MIPI-DSI 2-lane, HX8394 controller,
+    30 Hz, RGB565, ~294 ppi (11.6 px/mm). Run landscape via 90° rotation (ADR-0007)
+  - Touch: GT911, 5-point. I²C address is 0x5D **or** 0x14 depending on reset pin
+    levels, which the BSP doesn't drive — probe both; no touch means no STOP, so
+    no stimulation (ADR-0007)
+  - ESP32-C6 Wi-Fi co-processor: never started; `esp_hosted` is not linked (ADR-0007)
 - EMG AFE: TI **ADS1299-4PAG** — 24-bit, 4 differential channels, **SPI**,
   250–16000 SPS, built-in lead-off detection used for electrode impedance
 - Stimulator: PWM -> RC filter -> OPA2277PA voltage-controlled current source ->
@@ -34,10 +39,20 @@ Do not change clinical behavior without either matching the spec or writing an A
 
 ## Framework and language
 
-- ESP-IDF (v5.3+ required for MIPI-DSI), not Arduino/PlatformIO
-- **C++17** throughout (§5.7.5)
-- LVGL for UI via espressif/esp_lvgl_port
-- Pin exact dependency versions (no ^ ranges); commit dependencies.lock (SOUP record)
+- ESP-IDF **v5.4+** (required by the Waveshare BSP), not Arduino/PlatformIO
+- **C++17** throughout (§5.7.5). Waveshare's BSP and examples are C; their headers
+  are callable from C++.
+- Display stack (ADR-0007), from the Espressif component registry:
+  - `waveshare/esp32_p4_wifi6_touch_lcd_5` 1.0.4 (BSP: panel, backlight, touch, audio)
+  - `waveshare/esp_lcd_hx8394`, `espressif/esp_lcd_touch_gt911`
+  - `espressif/esp_lvgl_adapter` 0.6.x, **not** `esp_lvgl_port`; the BSP registers
+    the display through it
+  - `lvgl/lvgl` **9.5.0**, the version the BSP pins
+  - `espressif/esp_codec_dev` (speaker, for audible alarms)
+- Pin exact dependency versions (no ^ ranges); commit dependencies.lock (SOUP record).
+  Waveshare writes ranges; resolve and pin them.
+- Waveshare reference: github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-5
+  (`examples/esp-idf/08_lvgl_demo_v9` is the LVGL starting point)
 
 ## Architecture rules
 
@@ -57,6 +72,22 @@ Do not change clinical behavior without either matching the spec or writing an A
   lock, never by direct reference.
 - Any state can transition to FAULT: HV off, stimulation disabled, alarm raised.
   **Faults latch** and are cleared only by clinician acknowledgement (ADR-0005).
+
+## UI
+
+- Mockup: Claude Design canvas "NMT Monitor UI Mockup"
+  (https://claude.ai/artifact/SgNGFp2Lt87PK6oBho7Nu6), 1280x720 landscape. It
+  predates ADR-0006 and ADR-0008: its Main and Settings screens still show a "× 0.80"
+  multiplier, and its sizes are desktop pixels. Treat it as a layout sketch, not a spec.
+- **Sizes come from millimetres and viewing distance, not pixels** (ADR-0008).
+  Minimum font sizes: 77 px for TOF Count / peripheral ratio / fault title, 46 px for
+  secondary values, 32 px for labels and button text. Touch targets ≥ 116 px
+  (10 mm), ≥ 58 px (5 mm) apart (§5.2.3).
+- Fonts: IBM Plex Sans/Mono converted with `lv_font_conv` at fixed sizes; must include
+  Ω θ Δ × — · µ ≤ ≥ (Montserrat lacks Ω θ Δ).
+- LVGL 9.5 limits: no dashed box outlines (straight dashed lines are fine), letter
+  spacing in whole px, icons from the symbol font or converted images.
+- The simulator renders at 1280x720 in RGB565; judge it at device scale.
 
 ## Repo layout
 
@@ -116,4 +147,9 @@ validated in MATLAB first, then ported to C++. MATLAB exports golden test vector
   - Signal quality indicator: required by §5.3.2/§5.3.3, undefined
   - PTC and DBS modes: required by §5.1.2, no algorithms specified
   - EMG DSP: 60 Hz notch + bandpass, MATLAB first
-- Next: `ui` component, LVGL simulator (`sim/`), ESP-IDF project (`firmware/`), CI
+  - UI redraw to ADR-0008 sizes; mockup's × 0.80 multiplier to become the exponent
+  - On the board: silicon revision, rotated redraw speed, GT911 address
+    (ADR-0007 "To verify")
+  - Rev 2 inputs: 30 Hz vs 60 fps (§5.7.10), memory table (§5.7.9), greyscale
+    (§5.2.1), whether IEC 60601-1-8 applies (ADR-0008)
+- Next: UI redraw, `ui` component, LVGL simulator (`sim/`), ESP-IDF project (`firmware/`), CI
