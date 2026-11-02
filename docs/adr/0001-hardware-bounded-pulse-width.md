@@ -40,7 +40,7 @@ tetanus proves harder to schedule than expected.
 
 ## Consequences
 
-- `components/hal/` must expose the pulse-enable gate as a *one-shot with a width*,
+- `components/nmt_hal/` must expose the pulse-enable gate as a *one-shot with a width*,
   not as a settable pin. A HAL that offers `gate_set(bool)` would let callers
   reintroduce software-timed pulses; the interface has to make that unexpressible.
 - §5.7.3's flowchart no longer describes the firmware. It should be redrawn for

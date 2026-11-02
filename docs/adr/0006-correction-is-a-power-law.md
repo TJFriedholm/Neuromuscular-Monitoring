@@ -70,4 +70,5 @@ softened for Rev 2 unless data exists to support it.
   show what the current exponent demands of the facial reading.
 - §5.7.4's Settings Flowchart gains a group for measurement settings.
 - The exponent must be persisted across power cycles and shown on screen beside
-  the corrected value, so a reader can tell what was applied.
+  the corrected value, so a reader can tell what was applied. *Amended by
+  ADR-0009: shown in Settings, not beside the value.*

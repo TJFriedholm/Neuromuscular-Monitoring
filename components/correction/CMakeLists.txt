@@ -6,7 +6,11 @@ if(ESP_PLATFORM)
     # The device build must not ship without a sourced correction factor.
     # Define NMT_CORRECTION_DEFAULT_EXPONENT once the value and its citation are
     # available; until then this build fails loudly. See ADR-0006.
-    target_compile_definitions(${COMPONENT_LIB} PUBLIC NMT_REQUIRE_CORRECTION_DEFAULT)
+    # The demo build (NMT_DEMO_BUILD, set in firmware/CMakeLists.txt) is exempt:
+    # it runs a simulated patient and never stimulates anyone.
+    if(NOT NMT_DEMO_BUILD)
+        target_compile_definitions(${COMPONENT_LIB} PUBLIC NMT_REQUIRE_CORRECTION_DEFAULT)
+    endif()
 else()
     add_library(nmt_correction STATIC src/correction.cpp)
     target_include_directories(nmt_correction PUBLIC include)

@@ -1,0 +1,13 @@
+# Exact versions only (SOUP record); dependencies.lock pins everything else,
+# with hashes. Waveshare writes ranges; these are what those ranges resolved to
+# on 2026-10-26. See ADR-0007.
+dependencies:
+  idf: ">=5.5.3"
+  lvgl/lvgl:
+    version: "9.5.0"
+    public: true
+  waveshare/esp32_p4_wifi6_touch_lcd_5: "1.0.4"
+  waveshare/esp_lcd_hx8394: "2.1.0"
+  espressif/esp_lcd_touch_gt911: "1.2.1"
+  espressif/esp_lvgl_adapter: "0.6.4"
+  espressif/esp_codec_dev: "1.5.11"

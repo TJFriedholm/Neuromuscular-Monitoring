@@ -1,3 +1,9 @@
 tests/build/
 build/
 .DS_Store
+sim/build/
+# ESP-IDF: downloaded components (pinned by firmware/dependencies.lock, which
+# is committed) and the generated config (edit firmware/sdkconfig.defaults).
+firmware/managed_components/
+firmware/sdkconfig
+firmware/sdkconfig.old

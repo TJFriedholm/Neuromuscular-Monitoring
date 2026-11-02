@@ -1,0 +1,5 @@
+# Name,   Type, SubType, Offset,  Size, Flags
+# As Waveshare's LVGL example. The app is about 2 MB with the fonts; 8 MB leaves
+# room. No phy_init: the radios are never started (ADR-0007).
+nvs,      data, nvs,     0x9000,  0x6000,
+factory,  app,  factory, 0x10000, 8M,

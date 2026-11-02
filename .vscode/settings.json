@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "/Users/tjfriedholm/Documents/School-Notes/BME 4801/Neuromuscular-Monitoring/components/tof"
+    "cmake.sourceDirectory": "/Users/tjfriedholm/Documents/School-Notes/BME 4801/Neuromuscular-Monitoring/components/tof",
+    "idf.pythonInstallPath": "/opt/homebrew/bin/python3"
 }

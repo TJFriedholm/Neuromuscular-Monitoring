@@ -2,7 +2,7 @@ if(ESP_PLATFORM)
     idf_component_register(
         SRCS "src/mock_stimulator.cpp" "src/cmap_source.cpp"
         INCLUDE_DIRS "include"
-        REQUIRES hal tof
+        REQUIRES nmt_hal tof
     )
 else()
     add_library(nmt_hal_mock STATIC src/mock_stimulator.cpp src/cmap_source.cpp)

@@ -72,7 +72,10 @@ the risk before software rotation is measured on the board.
 - `firmware/` depends on the BSP, `esp_lcd_hx8394`, `esp_lcd_touch_gt911`,
   `esp_lvgl_adapter` and LVGL **9.5.0**, the version the BSP pins. Waveshare writes
   the others as ranges (`^1.0.4`, `~0.6`); we pin exact versions and commit
-  `dependencies.lock` (SOUP record). The BSP requires **ESP-IDF ≥ 5.4**.
+  `dependencies.lock` (SOUP record). The BSP requires **ESP-IDF ≥ 5.4**, but the
+  unit in hand is silicon revision v3.2, which needs **ESP-IDF ≥ 5.5.3** built with
+  `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=n`; a build for rev < 3 will not boot on it
+  (Espressif, *ESP32-P4 Chip Revision v3.x User Guide*). Waveshare's CI tests v5.5.5.
 - The host simulator (`sim/`) must run at 1280 × 720 and RGB565 so it shows what the
   panel will show. Near-identical dark greys can merge after 16-bit rounding;
   surface colours are chosen to differ by at least one RGB565 step.
@@ -90,7 +93,17 @@ the risk before software rotation is measured on the board.
 
 ## To verify on the board
 
-- ESP32-P4 silicon revision (Waveshare defaults to rev 3.x; a rev 1.3 profile exists).
-- Rendering time of a full-screen redraw with 90° software rotation.
+- ~~ESP32-P4 silicon revision~~ — **v3.2**, 400 MHz, 40 MHz crystal (esptool
+  v5.6.0, 2026-10-23, over the board's CH343 USB-UART port).
+- ~~Rendering time with 90° software rotation~~ — about **15 ms per redraw**
+  (≈10 ms render, ≈5 ms rotate and flush), Monitor page running with the EMG
+  strip updating every frame (LVGL sysmon, demo build, 2026-10-26). Well inside
+  the 33 ms frame at 30 Hz; portrait is not needed for speed. Not yet measured: a
+  full-screen page change.
 - That the 30 Hz timing is stable and free of tearing in `TRIPLE_PARTIAL`.
-- Which GT911 address the unit comes up on, across several power cycles.
+- Which GT911 address the unit comes up on, across several power cycles. First
+  boots (2026-10-26): **0x5D**.
+- That touch lands where it is drawn under rotation. The adapter rotates the
+  image but not touch, so the GT911 driver is set to swap X/Y and mirror X
+  (`firmware/main/main.cpp`). Derived from the adapter's "90° clockwise", not yet
+  confirmed by pressing.
