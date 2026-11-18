@@ -27,7 +27,7 @@ enum class State {
     WaitForResponses,
     Calculate,
     Display,
-    // Latched. Stimulation disabled, HV de-energised.
+    // Latched. Stimulation disabled, stimulator output disabled (ADR-0011).
     Fault,
 };
 
@@ -53,9 +53,11 @@ enum class Event {
 // invariant the safety tests assert against every state.
 bool stimulation_allowed(State s);
 
-// True where the HV stage may be energised. HV comes up slightly earlier than
-// stimulation so the supply has settled before the first pulse.
-bool hv_allowed(State s);
+// True where the stimulator output may be enabled (IStimulator::enable_output).
+// Exactly the stimulating states: output is enabled only for the duration of a
+// sequence, so a stuck PULSE line between trains delivers nothing (ADR-0011,
+// ADR-0012). The +80 V rail itself cannot be switched on shield V1.0.
+bool output_allowed(State s);
 
 class TofStateMachine {
   public:

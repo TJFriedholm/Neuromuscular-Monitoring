@@ -15,14 +15,10 @@ bool stimulation_allowed(State s) {
     }
 }
 
-bool hv_allowed(State s) {
-    switch (s) {
-        case State::Ready:
-        case State::WaitForResponses:
-            return true;
-        default:
-            return stimulation_allowed(s);
-    }
+bool output_allowed(State s) {
+    // Kept separate from stimulation_allowed so the two can diverge (e.g. a
+    // settling lead-in) without every caller changing. Today they are equal.
+    return stimulation_allowed(s);
 }
 
 State TofStateMachine::handle(Event e, FaultCause cause) {

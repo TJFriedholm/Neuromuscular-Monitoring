@@ -12,7 +12,7 @@ void tearDown() {}
 
 // --- stimulator bounds ---
 
-static void test_pulse_requires_hv() {
+static void test_pulse_requires_output_enabled() {
     hal_mock::MockStimulator s;
     s.set_amplitude_ma(20.0f);
     TEST_ASSERT_FALSE(s.fire_pulse(250));
@@ -21,7 +21,7 @@ static void test_pulse_requires_hv() {
 
 static void test_pulse_is_recorded_with_amplitude_and_width() {
     hal_mock::MockStimulator s;
-    s.enable_hv(true);
+    s.enable_output(true);
     s.set_amplitude_ma(30.0f);
     TEST_ASSERT_TRUE(s.fire_pulse(250));
     TEST_ASSERT_EQUAL_size_t(1, s.pulses().size());
@@ -29,15 +29,15 @@ static void test_pulse_is_recorded_with_amplitude_and_width() {
     TEST_ASSERT_EQUAL_UINT32(250, s.pulses()[0].width_us);
 }
 
-static void test_amplitude_above_sixty_milliamps_is_rejected() {
+static void test_amplitude_above_thirty_milliamps_is_rejected() {
     hal_mock::MockStimulator s;
-    TEST_ASSERT_FALSE(s.set_amplitude_ma(60.1f));
-    TEST_ASSERT_TRUE(s.set_amplitude_ma(60.0f));
+    TEST_ASSERT_FALSE(s.set_amplitude_ma(30.1f));
+    TEST_ASSERT_TRUE(s.set_amplitude_ma(30.0f));
 }
 
 static void test_pulse_width_outside_spec_range_is_rejected() {
     hal_mock::MockStimulator s;
-    s.enable_hv(true);
+    s.enable_output(true);
     s.set_amplitude_ma(20.0f);
     TEST_ASSERT_FALSE(s.fire_pulse(199));
     TEST_ASSERT_FALSE(s.fire_pulse(301));
@@ -47,11 +47,11 @@ static void test_pulse_width_outside_spec_range_is_rejected() {
 
 static void test_faulted_stimulator_refuses_everything() {
     hal_mock::MockStimulator s;
-    s.enable_hv(true);
+    s.enable_output(true);
     s.set_faulted(true);
     TEST_ASSERT_FALSE(s.set_amplitude_ma(20.0f));
     TEST_ASSERT_FALSE(s.fire_pulse(250));
-    TEST_ASSERT_FALSE(s.enable_hv(true));
+    TEST_ASSERT_FALSE(s.enable_output(true));
 }
 
 // --- synthetic CMAP ---
@@ -118,9 +118,9 @@ static void test_impedance_window_matches_spec() {
 
 int main() {
     UNITY_BEGIN();
-    RUN_TEST(test_pulse_requires_hv);
+    RUN_TEST(test_pulse_requires_output_enabled);
     RUN_TEST(test_pulse_is_recorded_with_amplitude_and_width);
-    RUN_TEST(test_amplitude_above_sixty_milliamps_is_rejected);
+    RUN_TEST(test_amplitude_above_thirty_milliamps_is_rejected);
     RUN_TEST(test_pulse_width_outside_spec_range_is_rejected);
     RUN_TEST(test_faulted_stimulator_refuses_everything);
     RUN_TEST(test_no_blockade_gives_flat_train_and_ratio_one);

@@ -29,14 +29,34 @@ Do not change clinical behavior without either matching the spec or writing an A
     levels, which the BSP doesn't drive — probe both (the BSP does); no touch means
     no STOP, so no stimulation (ADR-0007). This unit came up at 0x5D.
   - ESP32-C6 Wi-Fi co-processor: never started; `esp_hosted` is not linked (ADR-0007)
-- EMG AFE: TI **ADS1299-4PAG** — 24-bit, 4 differential channels, **SPI**,
-  250–16000 SPS, built-in lead-off detection used for electrode impedance
-- Stimulator: PWM -> RC filter -> OPA2277PA voltage-controlled current source ->
-  IRF840. Separate 2N7002 pulse-enable gate. 0–60 mA, 200–300 µs pulses.
-  **Two independent control lines: amplitude and pulse-enable.**
-- Isolation: ISO7762DBQR 6-channel digital isolator carries SPI, PWM,
-  pulse-enable and DRDY across the barrier; RECOM R05P205S makes the isolated rail
-- Impedance window: 500 Ω – 50 kΩ
+- Shield: **NME_Shield_Board V1.0** (EasyEDA). **The hardware is frozen for this
+  build**: it differs from the spec's parts, and every difference is an ADR
+  (0010–0014), never a hardware change. Hardware fixes go under "Rev 2".
+- Host connection: Waveshare 40-pin header (J1). I²C on pins 4/6 = GPIO7/8,
+  **the same bus as GT911 touch (0x5D/0x14) and the ES8311 codec (0x18)**; use the
+  BSP's bus handle, never a second master (ADR-0013). STIM_PULSE and
+  STIM_OUTPUT_ENABLE on pins 35/37 = GPIO46/47 (to verify). Nothing comes back
+  from the patient side except I²C: no DRDY, no fault line, no current readback.
+- EMG: AD8226 + OPA2197 front end (gain ≈ 50.2, 10.6 Hz HP, 408 Hz LP) into a TI
+  **ADS122C04** — 24-bit, **I²C** (0x40, to verify), ≤ 2000 SPS, one EMG input.
+  DRDY not wired, so it is polled (ADR-0014)
+- Stimulator: **AD5241** digital pot over I²C (0x2C, to verify) sets the amplitude
+  command; **TS5A3159** switch gated by STIM_PULSE; **PA441** improved-Howland
+  current source on +80 V (LT8365) and −15 V (MC34063). **0–30 mA** (spec says 60;
+  ADR-0010), 200–300 µs pulses. mA → pot setting comes from a bench table.
+  **Two independent control lines: STIM_PULSE and STIM_OUTPUT_ENABLE** (drives the
+  pot's SHDN, forcing the command to 0 V).
+- **The +80 V rail is always on**; firmware cannot switch it. "Output disabled"
+  (PULSE low, ENABLE low, pot at 0) replaces "HV off" (ADR-0011)
+- **No hardware pulse-width limit on the shield.** The bound is the ESP32's one-shot
+  peripheral, backed by enabling output only during a sequence and by
+  watchdogs (ADR-0012)
+- Isolation: ISO1640 (I²C) + ISO7720**F** (PULSE, ENABLE; default-low outputs);
+  REC5A-0505SW/H2 makes ISO_5V, 2 kVDC functional isolation only
+- Impedance: no lead-off detection. Estimated from STIM_OUT (divider into ADC
+  AIN3) and the commanded current, once per train, **stimulating electrodes only**
+  (ADR-0014, proposed). Window 500 Ω – 50 kΩ; the source saturates above ≈ 2.6 kΩ
+  at 30 mA
 - WiFi/BLE are disabled during stimulation and recording (§5.6.5)
 
 ## Framework and language
@@ -76,7 +96,9 @@ Do not change clinical behavior without either matching the spec or writing an A
 - **Core algorithms are pure** (ADR-0002): arguments in, result out, no globals.
   Device state is one owned struct; the UI reads it by snapshot copy under a brief
   lock, never by direct reference.
-- Any state can transition to FAULT: HV off, stimulation disabled, alarm raised.
+- Stimulator output (`IStimulator::enable_output`) is on only in the stimulating
+  states (`safety::output_allowed`), never between trains (ADR-0011).
+- Any state can transition to FAULT: output disabled, stimulation disabled, alarm raised.
   **Faults latch** and are cleared only by clinician acknowledgement (ADR-0005).
 
 ## UI
@@ -106,9 +128,12 @@ Do not change clinical behavior without either matching the spec or writing an A
 
 ```
 components/   tof, calib, correction, safety, nmt_hal, hal_mock, ui,
-              sim_device (simulated patient for sim/ and the demo firmware);
-              drivers to come
+              sim_device (simulated patient for sim/ and the demo firmware),
+              shield (drivers for the NME shield: ADS122C04, AD5241, RMT pulse
+              one-shot; ShieldStimulator and ShieldEmg implement the HAL)
 firmware/     ESP-IDF project for the ESP32-P4 (currently the demo build)
+bench/        ESP-IDF bench firmware: serial commands that exercise each shield
+              driver on its own. No UI, no clinical logic. Dummy loads only.
 sim/          desktop LVGL simulator using SDL2
 tests/        host unit tests (Unity 2.6.0, vendored in tests/vendor/unity)
 docs/adr/     architecture decision records
@@ -158,8 +183,22 @@ idf.py -C firmware -p /dev/cu.usbmodem5C931595651 flash monitor   # Ctrl+] quits
 `firmware/` is currently the **demo build** (`NMT_DEMO_BUILD` in
 `firmware/CMakeLists.txt`): the real UI and core logic driven by `sim_device`,
 as the simulator is. It is exempt from the correction-exponent check (ADR-0006)
-and must stop being so before any driver that stimulates is linked. The bench
-keys (B, I, F, A) are typed into the serial monitor.
+and must stop being so before any driver that stimulates is linked, so it sets
+`EXCLUDE_COMPONENTS shield`. The bench keys (B, I, F, A) are typed into the
+serial monitor.
+
+`bench/` is where the shield drivers run. It stimulates: **resistive dummy loads
+on CN1 only, never a person.** Type `help` at the `bench>` prompt; the
+bring-up order is in the header of `bench/main/bench_main.cpp`.
+
+```
+idf.py -C bench build
+idf.py -C bench -p /dev/cu.usbmodem5C931595651 flash monitor
+```
+
+It creates the I²C bus itself (same port, pins and settings as the BSP), because
+it does not link the BSP. The device build must use `bsp_i2c_get_handle()`
+instead (ADR-0013).
 
 Settings live in `firmware/sdkconfig.defaults` (LVGL's equivalent of
 `sim/lv_conf.h`; keep the two in step). `sdkconfig` is generated and ignored:
@@ -191,8 +230,9 @@ validated in MATLAB first, then ported to C++. MATLAB exports golden test vector
 
 - Done: `tof`, `calib`, `correction`, `safety` (fault latch + TOF state machine),
   `nmt_hal` interfaces, `hal_mock`, `ui` (Monitor, Signal, Menu and settings
-  pages, keypad entry, Fault), SDL simulator. 102 host unit tests passing.
-  Demo firmware runs on the board (2026-10-26).
+  pages, keypad entry, Fault), SDL simulator. 120 host unit tests passing.
+  Demo firmware runs on the board (2026-10-26). Shield drivers and bench
+  firmware written and built (2026-11-18), not yet run on the shield.
 - Open:
   - Correction exponent default value and citation (blocks the device build by
     design — see ADR-0006)
@@ -206,4 +246,11 @@ validated in MATLAB first, then ported to C++. MATLAB exports golden test vector
     across power cycles (ADR-0007 "To verify")
   - Rev 2 inputs: 30 Hz vs 60 fps (§5.7.10), memory table (§5.7.9), greyscale
     (§5.2.1), whether IEC 60601-1-8 applies (ADR-0008)
-- Next: remaining UI screens, drivers (ADS1299, stimulator), CI
+  - Calibration still **clamps** a ×1.3 target above `i_max_ma` (30 mA); ADR-0010
+    says it must fault instead. Needs a calib status, FaultCause and UI text.
+  - Shield bring-up with `bench/`: J1 pins/GPIOs, I²C addresses, which ADC input
+    carries ADC_SIGNAL, front-end gain, missed-sample rate, mA → pot table,
+    impedance table (ADR-0010–0014 "To verify")
+  - Not yet written: impedance driver (`IImpedance`) waits on the bench table;
+    wiring the drivers into a device build waits on ADR-0006
+- Next: shield bring-up on the bench, remaining UI screens, CI

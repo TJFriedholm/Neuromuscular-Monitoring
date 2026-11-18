@@ -151,13 +151,13 @@ FaultText present_fault(safety::FaultCause cause, float impedance_ohm) {
                           static_cast<double>(impedance_ohm / 1000.0f));
             break;
         case safety::FaultCause::CalibrationNoResponse:
-            std::snprintf(f.cause, sizeof f.cause, "No response up to 60 mA");
+            std::snprintf(f.cause, sizeof f.cause, "No response up to 30 mA");
             std::snprintf(f.detail, sizeof f.detail,
                           "Calibration evoked no response. Check electrode placement and lead "
                           "seating.");
             break;
         case safety::FaultCause::CalibrationNoPlateau:
-            std::snprintf(f.cause, sizeof f.cause, "No plateau up to 60 mA");
+            std::snprintf(f.cause, sizeof f.cause, "No plateau up to 30 mA");
             std::snprintf(f.detail, sizeof f.detail,
                           "The response kept growing to the limit, so no supramaximal current "
                           "could be set.");
@@ -165,7 +165,7 @@ FaultText present_fault(safety::FaultCause cause, float impedance_ohm) {
         case safety::FaultCause::Stimulator:
             std::snprintf(f.cause, sizeof f.cause, "Stimulator hardware fault");
             std::snprintf(f.detail, sizeof f.detail,
-                          "Output current did not match the commanded amplitude.");
+                          "The stimulator did not respond as commanded.");
             break;
         case safety::FaultCause::EmgHardware:
             std::snprintf(f.cause, sizeof f.cause, "EMG amplifier not responding");

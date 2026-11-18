@@ -203,21 +203,25 @@ static void test_stimulation_only_allowed_while_calibrating_or_stimulating() {
     TEST_ASSERT_FALSE(safety::stimulation_allowed(State::Fault));
 }
 
-static void test_no_stimulation_or_hv_in_fault() {
+static void test_no_stimulation_or_output_in_fault() {
     // The single property everything else rests on.
     TEST_ASSERT_FALSE(safety::stimulation_allowed(State::Fault));
-    TEST_ASSERT_FALSE(safety::hv_allowed(State::Fault));
+    TEST_ASSERT_FALSE(safety::output_allowed(State::Fault));
 }
 
-static void test_hv_is_off_in_idle() {
-    TEST_ASSERT_FALSE(safety::hv_allowed(State::Idle));
+static void test_output_is_off_in_idle() {
+    TEST_ASSERT_FALSE(safety::output_allowed(State::Idle));
 }
 
-static void test_hv_is_on_wherever_stimulation_is() {
+// ADR-0011: output is enabled only during a sequence, never between trains.
+static void test_output_is_off_between_trains() {
+    TEST_ASSERT_FALSE(safety::output_allowed(State::Ready));
+    TEST_ASSERT_FALSE(safety::output_allowed(State::WaitForResponses));
+}
+
+static void test_output_is_on_exactly_where_stimulation_is() {
     for (State s : kAllStates) {
-        if (safety::stimulation_allowed(s)) {
-            TEST_ASSERT_TRUE(safety::hv_allowed(s));
-        }
+        TEST_ASSERT_EQUAL(safety::stimulation_allowed(s), safety::output_allowed(s));
     }
 }
 
@@ -239,8 +243,9 @@ int main() {
     RUN_TEST(test_stop_returns_to_idle_from_any_non_fault_state);
     RUN_TEST(test_stop_mid_train_resets_pulse_count);
     RUN_TEST(test_stimulation_only_allowed_while_calibrating_or_stimulating);
-    RUN_TEST(test_no_stimulation_or_hv_in_fault);
-    RUN_TEST(test_hv_is_off_in_idle);
-    RUN_TEST(test_hv_is_on_wherever_stimulation_is);
+    RUN_TEST(test_no_stimulation_or_output_in_fault);
+    RUN_TEST(test_output_is_off_in_idle);
+    RUN_TEST(test_output_is_off_between_trains);
+    RUN_TEST(test_output_is_on_exactly_where_stimulation_is);
     return UNITY_END();
 }

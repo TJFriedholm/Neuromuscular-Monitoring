@@ -14,7 +14,7 @@ bool MockStimulator::set_amplitude_ma(float ma) {
 }
 
 bool MockStimulator::fire_pulse(std::uint32_t width_us) {
-    if (faulted_ || !hv_) {
+    if (faulted_ || !output_) {
         return false;
     }
     if (width_us < hal::kPulseWidthMinUs || width_us > hal::kPulseWidthMaxUs) {
@@ -24,17 +24,17 @@ bool MockStimulator::fire_pulse(std::uint32_t width_us) {
     return true;
 }
 
-bool MockStimulator::enable_hv(bool on) {
+bool MockStimulator::enable_output(bool on) {
     if (faulted_ && on) {
         return false;
     }
-    hv_ = on;
+    output_ = on;
     return true;
 }
 
 void MockStimulator::reset() {
     amplitude_ma_ = 0.0f;
-    hv_ = false;
+    output_ = false;
     faulted_ = false;
     pulses_.clear();
 }

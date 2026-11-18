@@ -1,0 +1,19 @@
+# Bench firmware settings. `idf.py build` turns these into sdkconfig (not
+# committed); edit here, not there.
+
+# ---- Chip: ESP32-P4 silicon v3.2 (ADR-0007) ---------------------------------
+CONFIG_IDF_TARGET="esp32p4"
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=n
+CONFIG_ESP32P4_REV_MIN_300=y
+CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
+
+# ---- FreeRTOS ---------------------------------------------------------------
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# ---- Watchdogs (ADR-0012 layer 3) -------------------------------------------
+# A hung task or a stuck interrupt resets the chip, which returns the PULSE and
+# OUTPUT_ENABLE pins to their reset state.
+CONFIG_ESP_INT_WDT=y
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_PANIC=y

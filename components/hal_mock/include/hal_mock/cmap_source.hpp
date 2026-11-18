@@ -27,7 +27,7 @@ struct CmapParams {
     // Stimulus amplitude at which recruitment plateaus, in mA. Below this the
     // response scales linearly; at or above it the response is full. Used to
     // exercise the calibration ramp.
-    float supramaximal_ma = 35.0f;
+    float supramaximal_ma = 15.0f;  // under the 30 mA shield limit with x1.3 margin (ADR-0010)
 };
 
 // Fills amps_mv[0..3] with a synthetic train at full stimulus.

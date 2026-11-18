@@ -29,7 +29,8 @@ enum class Status {
 struct Config {
     float i_start_ma = 10.0f;
     float i_step_ma = 5.0f;
-    float i_max_ma = 60.0f;
+    // Shield V1.0 limit, matching hal::kCurrentMaxMa (ADR-0010).
+    float i_max_ma = 30.0f;
 
     // Plateau threshold: the response is considered to have stopped growing
     // when successive amplitudes differ by less than this, in millivolts.

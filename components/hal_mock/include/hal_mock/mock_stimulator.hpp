@@ -20,8 +20,8 @@ class MockStimulator final : public hal::IStimulator {
   public:
     bool set_amplitude_ma(float ma) override;
     bool fire_pulse(std::uint32_t width_us) override;
-    bool enable_hv(bool on) override;
-    bool hv_enabled() const override { return hv_; }
+    bool enable_output(bool on) override;
+    bool output_enabled() const override { return output_; }
     bool faulted() const override { return faulted_; }
 
     // Test controls.
@@ -32,7 +32,7 @@ class MockStimulator final : public hal::IStimulator {
 
   private:
     float amplitude_ma_ = 0.0f;
-    bool hv_ = false;
+    bool output_ = false;
     bool faulted_ = false;
     std::vector<FiredPulse> pulses_;
 };

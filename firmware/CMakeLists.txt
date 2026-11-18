@@ -15,6 +15,9 @@ cmake_minimum_required(VERSION 3.16)
 set(NMT_DEMO_BUILD ON)
 
 set(EXTRA_COMPONENT_DIRS ${CMAKE_CURRENT_LIST_DIR}/../components)
+# The shield drivers stimulate. Keep them out of the demo build until the
+# ADR-0006 exemption above is removed; bench/ is where they are exercised.
+set(EXCLUDE_COMPONENTS shield)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(nmt_firmware)

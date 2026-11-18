@@ -35,7 +35,7 @@ calib::Config base_config() {
     calib::Config c;
     c.i_start_ma = 10.0f;
     c.i_step_ma = 5.0f;
-    c.i_max_ma = 60.0f;
+    c.i_max_ma = 60.0f;  // test range for the algorithm, not the device limit (calib.hpp)
     c.theta_mv = 0.10f;
     c.delta_mv = 0.05f;
     return c;

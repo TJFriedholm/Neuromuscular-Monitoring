@@ -19,6 +19,8 @@ add_subdirectory(${NMT_COMPONENTS}/correction ${CMAKE_BINARY_DIR}/correction)
 add_subdirectory(${NMT_COMPONENTS}/safety     ${CMAKE_BINARY_DIR}/safety)
 add_subdirectory(${NMT_COMPONENTS}/nmt_hal    ${CMAKE_BINARY_DIR}/nmt_hal)
 add_subdirectory(${NMT_COMPONENTS}/hal_mock   ${CMAKE_BINARY_DIR}/hal_mock)
+# Only the pure parts of the shield drivers build here.
+add_subdirectory(${NMT_COMPONENTS}/shield     ${CMAKE_BINARY_DIR}/shield)
 # Only the UI model builds here; the LVGL view needs the simulator.
 add_subdirectory(${NMT_COMPONENTS}/ui         ${CMAKE_BINARY_DIR}/ui)
 
@@ -37,3 +39,4 @@ nmt_add_test(test_tof_state_machine nmt_safety)
 nmt_add_test(test_hal_mock          nmt_hal_mock nmt_tof)
 nmt_add_test(test_ui_model          nmt_ui_model)
 nmt_add_test(test_ui_settings       nmt_ui_model)
+nmt_add_test(test_shield            nmt_shield)
