@@ -35,7 +35,9 @@ the commanded current, that gives a load estimate Z ≈ V / I. This deviates fro
 the spec in three ways:
 
 1. **It measures the stimulating pair, not the recording electrodes.** The
-   recording electrodes (EMG_AFE_P/N) have no impedance path at all.
+   recording electrodes (EMG_AFE_P/N) have no impedance path at all. The team
+   accepted this for the V1.0 build on 2026-11-18; closing the gap is tracked
+   in issue #1.
 2. **It is not continuous.** It exists only during a pulse, so at most four
    times per TOF train.
 3. **It uses commanded current, not measured current.** The voltage across R29
@@ -81,7 +83,7 @@ motor threshold, which would then be too small to measure on this divider.
   electrode shows up only as a flat or noisy EMG. That is a signal-quality
   condition (still undefined, see CLAUDE.md), not an impedance one.
 - Rev 2: restate §5.1.2 Impedance Detection to what this board measures, or
-  require a lead-off path on the recording electrodes.
+  require a lead-off path on the recording electrodes (issue #1).
 
 ## To verify on the board
 

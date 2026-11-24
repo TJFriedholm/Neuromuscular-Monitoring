@@ -46,7 +46,8 @@ are unchanged.
 
 The shield's design target is 30 mA, against the spec's 60 mA. The firmware
 limit follows the board: `hal::kCurrentMaxMa` becomes **30.0**, so calibration
-cannot ask for a current the hardware was not designed to deliver.
+cannot ask for a current the hardware was not designed to deliver. **The team
+accepted 30 mA as the device maximum on 2026-11-18.**
 
 Clinical consequence: supramaximal calibration ramps to the plateau and then
 applies ×1.3 (ADR-0003). If the plateau current is above about 23 mA, the ×1.3
