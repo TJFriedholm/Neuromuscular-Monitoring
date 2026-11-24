@@ -91,9 +91,25 @@ motor threshold, which would then be too small to measure on this divider.
 
 ## To verify on the board
 
-- The input mapping, with `adc_inputs`: AIN0 and AIN1 near 2.5 V, AIN2 tracking
-  STIM_OUT / 46.2 (compare with a meter at TP12), AIN3 floating.
-- EMG noise floor and gain at 2000 SPS turbo, AIN0 − AIN1, internal reference.
+- ~~The input mapping~~ **Done 2026-11-24** (`adc_inputs`, CN1 empty): AVDD
+  5.035 V; AIN0 2.513 V, AIN1 2.513 V, AIN0 − AIN1 −0.11 mV; AIN2 1.649 V, i.e.
+  STIM_OUT ≈ 77 V open-circuit (the meter read about 76 V); AIN3 floats (0.25 V);
+  ADC offset 4 µV. Still to do: a meter at TP12 against `stim_out_dc`.
+- Sample rate: **measured 1952 SPS**, not 2000 (the ADC's own oscillator, about
+  2.4 % slow; 0 missed). Timing must use the measured rate, not the nominal one.
+- EMG noise floor, **measured 2026-11-24** (user-reported): CN1 pins 4, 5 and 6
+  shorted, **23 µV rms at the electrodes** (nominal gain), about 1.2 mV rms at
+  the ADC. With CN1 open it read 0.46 mV rms (pickup on floating inputs).
+  Spectrum of a 4.2 s capture (Mac on battery, 25 µV rms): **mains is only 3 %
+  of the power** (4.2 µV rms at 60 Hz and harmonics), so a notch will not fix
+  it. The rest sits inside the front end's 10–408 Hz passband (12.5 µV in
+  10–60 Hz, 18.9 µV in 60–200 Hz, 9.6 µV in 200–408 Hz), with tones at
+  non-mains frequencies (15.2, 115, 130, 145 Hz). That points at interference
+  entering before the front end (switching converters, common mode through
+  EMG_REF's 1 MΩ), possibly aliased; not yet confirmed. **Accepted for now**
+  (2026-11-24) so bring-up can continue; the two tests that would separate the
+  causes (short to ISO_GND instead of EMG_REF; sample at 1000 SPS and see if
+  the tones move) are deferred. Then the gain, with a known signal.
 - Missed-sample rate at 400 kHz on the shield bus (ADR-0015).
 - The impedance table across loads and widths, and its repeatability.
 - That CMAP onset falls after the mux returns to EMG.

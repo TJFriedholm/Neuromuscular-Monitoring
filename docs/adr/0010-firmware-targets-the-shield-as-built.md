@@ -88,8 +88,9 @@ board reports the shortfall directly.
 - J1 pins carrying `HOST_STIM_PULSE` and `HOST_STIM_OUTPUT_ENABLE`, and their
   GPIO numbers. The schematic labels sit between pins 33/35 and 35/37, and
   Waveshare lists pin 33 as GND. Check continuity before powering.
-- ADS122C04 address (A0/A1 appear tied to ISO_GND → 0x40) and AD5241 address
-  (AD0/AD1 appear tied to ISO_GND → 0x2C). Scan the bus.
+- ~~ADS122C04 and AD5241 addresses~~ **Done 2026-11-24**: 0x40 and 0x2C on
+  the shield bus; ADC identity confirmed by `adc_reset`, pot by write/readback
+  of 128 and 0 (ADR-0015).
 - ADS122C04 inputs as read from sheet 3: AIN0 = `ADC_SIGNAL`, AIN1 = `ISO_VCM`,
   AIN2 = `IMP_ADC_IN`, AIN3 unconnected. Check with `adc_inputs` (ADR-0014).
 - How the shield mates: J1 is a male header and so is Waveshare's. Whatever

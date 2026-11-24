@@ -166,12 +166,54 @@ int scan_bus(const char* label, i2c_master_bus_handle_t bus, int port, int sda, 
     return found;
 }
 
+// Result of the boot-time wiring check (check_shield_lines).
+bool g_sda_pulled_up = false;
+bool g_scl_pulled_up = false;
+
+// Reads a pin with the P4's internal pull-down (~45 kOhm) on and nothing else
+// driving it. The shield's R2/R4 (3.3 kOhm to HOST_3V3) overpower it, so a pin
+// wired to the shield reads 1, and an unconnected pin reads 0. HOST_3V3 comes
+// from the Waveshare (J1 pin 2), so this works with the shield's own 5 V off.
+// Must run before the I2C driver takes the pins.
+bool pulled_up_externally(int gpio) {
+    gpio_config_t gc{};
+    gc.pin_bit_mask = 1ULL << gpio;
+    gc.mode = GPIO_MODE_INPUT;
+    gc.pull_up_en = GPIO_PULLUP_DISABLE;
+    gc.pull_down_en = GPIO_PULLDOWN_ENABLE;
+    ESP_ERROR_CHECK(gpio_config(&gc));
+    vTaskDelay(pdMS_TO_TICKS(2));
+    return gpio_get_level(static_cast<gpio_num_t>(gpio)) == 1;
+}
+
+void check_shield_lines() {
+    g_sda_pulled_up = pulled_up_externally(kShieldI2cSdaGpio);
+    g_scl_pulled_up = pulled_up_externally(kShieldI2cSclGpio);
+}
+
+void print_shield_lines() {
+    std::printf("Shield I2C wiring (internal pull-down vs the shield's 3.3 kOhm pull-ups):\n");
+    std::printf("  SDA GPIO%d (header 16): %s\n", kShieldI2cSdaGpio,
+                g_sda_pulled_up ? "pulled up -> reaches the shield" : "NOT pulled up");
+    std::printf("  SCL GPIO%d (header 20): %s\n", kShieldI2cSclGpio,
+                g_scl_pulled_up ? "pulled up -> reaches the shield" : "NOT pulled up");
+    if (!g_sda_pulled_up || !g_scl_pulled_up) {
+        std::printf("  -> a line not pulled up is not connected to shield J1 pin 4/6, or J1 pin 2\n"
+                    "     (HOST_3V3) is not jumpered to header pin 2\n");
+    }
+}
+
 void scan_shield_bus() {
     const int n = scan_bus("Shield", g_shield_bus, kShieldI2cPort, kShieldI2cSdaGpio,
                            kShieldI2cSclGpio, shield_bus_name);
     if (n == 0) {
-        std::printf("  -> check the jumper wires, and that the shield is powered (ISO_5V, "
-                    "ISO_3V3)\n");
+        if (g_sda_pulled_up && g_scl_pulled_up) {
+            std::printf("  -> wiring reaches the shield (at boot), but nothing behind the\n"
+                        "     isolator answers: is the shield's 5 V supply on? (TP6 ~3.2 V)\n"
+                        "     Or SDA/SCL swapped: J1 4 -> header 16, J1 6 -> header 20.\n");
+        } else {
+            std::printf("  -> fix the wiring above first\n");
+        }
     }
 }
 
@@ -234,7 +276,11 @@ int cmd_scan(int argc, char** argv) {
         return 1;
     }
     if (board) scan_board_bus();
-    if (shield) scan_shield_bus();
+    if (shield) {
+        std::printf("(wiring check below is from boot; press RST to redo it)\n");
+        print_shield_lines();
+        scan_shield_bus();
+    }
     return 0;
 }
 
@@ -710,6 +756,8 @@ extern "C" void app_main() {
     // Two buses (ADR-0015). The bench does not link the BSP, so it creates the
     // board bus itself on the BSP's port and pins, for scanning only.
     g_board_bus = new_bus(kBoardI2cPort, kBoardI2cSdaGpio, kBoardI2cSclGpio, false);
+    // Wiring check first, while the pins are still plain GPIO.
+    check_shield_lines();
     // Internal pull-ups only so an unwired bus does not float; the shield's
     // R2/R4 (3.3 kOhm) are the real ones.
     g_shield_bus = new_bus(kShieldI2cPort, kShieldI2cSdaGpio, kShieldI2cSclGpio, true);
@@ -751,6 +799,7 @@ extern "C" void app_main() {
 #endif
 
     std::printf("\n");
+    print_shield_lines();
     scan_board_bus();
     scan_shield_bus();
     std::printf("\nType `help`. Next: `adc_reset`.\n\n");

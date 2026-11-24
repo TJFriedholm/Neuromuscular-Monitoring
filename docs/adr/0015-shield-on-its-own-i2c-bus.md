@@ -77,10 +77,14 @@ the shield its own header pins for I²C in the schematic.
 
 ## To verify on the board
 
-- `scan board` with the shield disconnected shows 0x40 (ES7210), 0x18, and
-  0x5D or 0x14. Confirms the clash on this unit.
-- `scan shield` shows exactly 0x2C and 0x40.
-- `adc_reset` passes (registers read back 0).
-- Continuity: shield J1 pin 4 to header pin 16 (GPIO28), J1 pin 6 to header
-  pin 20 (GPIO29), and nothing on header pins 4/6 from the shield.
-- `emg_stats` at 400 kHz: about 2000 SPS, few missed, no bus errors.
+- ~~`scan board` with the shield disconnected shows 0x40 (ES7210), 0x18, and
+  0x5D or 0x14.~~ **Done 2026-11-24** (bench no-stim build, shield unplugged):
+  0x18, 0x40, 0x5D. The clash is real on this unit; GT911 is at 0x5D.
+- **Done 2026-11-24** (no-stim bench, shield powered, CN1 empty):
+  - the boot wiring check sees the shield's pull-ups on GPIO28/29;
+  - `scan shield` shows exactly 0x2C and 0x40, and the board bus is unchanged;
+  - `adc_reset` passes (all four registers read back 0x00);
+  - `emg_stats` at 400 kHz: 1952 SPS, 0 missed, 0 bus errors.
+- An earlier run that day found 0x2C on the *board* bus and nothing on GPIO28/29,
+  with the shield wired to header pins 4/6. The boot wiring check and the scans
+  caught it.

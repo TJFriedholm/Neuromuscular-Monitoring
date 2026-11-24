@@ -255,6 +255,9 @@ validated in MATLAB first, then ported to C++. MATLAB exports golden test vector
   - Signal quality indicator: required by §5.3.2/§5.3.3, undefined
   - PTC and DBS modes: required by §5.1.2, no algorithms specified
   - EMG DSP: 60 Hz notch + bandpass, MATLAB first
+  - EMG noise floor is 23–25 µV rms with inputs shorted, mostly non-mains tones
+    in band; cause not found, accepted for now (ADR-0014). Affects TOF ratio
+    precision (about ±10 % per twitch on a 1 mV T1)
   - UI: calibration progress page; alarm sound; volume reaches no hardware yet
     (brightness is wired in the demo, not yet confirmed on the panel)
   - On the board: touch orientation under rotation, tearing, GT911 address
@@ -263,12 +266,19 @@ validated in MATLAB first, then ported to C++. MATLAB exports golden test vector
     (§5.2.1), whether IEC 60601-1-8 applies (ADR-0008)
   - Calibration still **clamps** a ×1.3 target above `i_max_ma` (30 mA); ADR-0010
     says it must fault instead. Needs a calib status, FaultCause and UI text.
-  - Shield bring-up with `bench/`: J1 pins/GPIOs, the GPIO28/29 jumper wiring,
-    I²C addresses and identity, ADC input mapping (`adc_inputs`), front-end gain, missed-sample rate, mA → pot table,
+  - Shield bring-up with `bench/`. **Done 2026-11-24 (no-stim):** GPIO28/29
+    wiring, both addresses and the ADC's identity, ADC input mapping (AIN2 =
+    IMP_SENSE), pot write/readback, EMG sampling (**1952 SPS measured**, 0 missed,
+    0 bus errors). Still open: J1 35/37 → GPIO46/47, EMG noise with inputs
+    shorted, front-end gain, missed-sample rate, mA → pot table,
     impedance table (ADR-0010–0015 "To verify")
-  - Shield hardware: one capacitor is under-rated for its voltage (user-reported
-    2026-11-24; which one is not recorded). The HV converters run whenever the
-    shield is powered, so it is stressed in no-stim tests too.
+  - Shield hardware: **C42** (PA441 compensation, CC1–CC2) was under-rated and
+    was **replaced 2026-11-24 with 68 pF, 200 V** (user-reported, visually
+    checked). Its dielectric is not confirmed: a compensation capacitor should
+    be C0G/NP0. Confirm the rails (TP9 ≈ +78 V, TP7 ≈ −15 V) and idle current
+    after the rework before stimulating.
+  - Shield test points as built: **TP1 = HOST_GND, TP2 = HOST_3V3**, the reverse
+    of the schematic's labels (bench, 2026-11-24).
   - Not yet written: impedance driver (`IImpedance`) waits on the bench table;
     wiring the drivers into a device build waits on ADR-0006
 - Next: shield bring-up on the bench, remaining UI screens, CI
