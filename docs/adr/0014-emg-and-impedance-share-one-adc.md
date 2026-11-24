@@ -29,8 +29,8 @@ AIN3 unconnected. Its DRDY pin is not connected.
   clipped, and the CMAP detection blanks the artifact anyway. PGA bypassed
   (gain 1), so an artifact near the rails cannot overdrive the PGA.
   AVDD is still measured at start as a health check of the analog side.
-- **Scaling:** mV at the electrodes = ADC volts ÷ 50.2, from the schematic's
-  nominal gain. Measure it on the bench and replace the nominal value.
+- **Scaling:** mV at the electrodes = ADC volts ÷ **97.5, measured** (was 50.2
+  from the schematic; see below).
 
 ## Impedance
 
@@ -98,7 +98,8 @@ motor threshold, which would then be too small to measure on this divider.
 - Sample rate: **measured 1952 SPS**, not 2000 (the ADC's own oscillator, about
   2.4 % slow; 0 missed). Timing must use the measured rate, not the nominal one.
 - EMG noise floor, **measured 2026-11-24** (user-reported): CN1 pins 4, 5 and 6
-  shorted, **23 µV rms at the electrodes** (nominal gain), about 1.2 mV rms at
+  shorted, **23 µV rms at the electrodes** at the nominal gain (about 12 µV with
+  the measured gain), about 1.2 mV rms at
   the ADC. With CN1 open it read 0.46 mV rms (pickup on floating inputs).
   Spectrum of a 4.2 s capture (Mac on battery, 25 µV rms): **mains is only 3 %
   of the power** (4.2 µV rms at 60 Hz and harmonics), so a notch will not fix
@@ -109,7 +110,23 @@ motor threshold, which would then be too small to measure on this divider.
   EMG_REF's 1 MΩ), possibly aliased; not yet confirmed. **Accepted for now**
   (2026-11-24) so bring-up can continue; the two tests that would separate the
   causes (short to ISO_GND instead of EMG_REF; sample at 1000 SPS and see if
-  the tones move) are deferred. Then the gain, with a known signal.
+  the tones move) are deferred.
+- **Gain, measured 2026-11-24** (Keysight generator into CN1 4, ground on 5, 6
+  and 2; ADC captures fitted with a sine): **94.2 at 100 Hz** (10.2 mVpp in,
+  RMS-Cycle on the scope, Avg 64; 961 mVpp at the ADC), a second pair gave 97.
+  Midband ≈ **97.5**, about **twice the nominal 50.2**. The frequency response
+  matches the design within 3 % (relative to 100 Hz: 20 Hz 0.898 vs 0.915,
+  50 Hz 1.004 vs 1.005, 200 Hz 0.924 vs 0.929, 400 Hz 0.718 vs 0.739), so the
+  filters are right and one gain-setting resistor is likely off. **To check:
+  R8 (5.49 kΩ), R10 (40.2 kΩ), R11 (10 kΩ)**, unpowered. Consequences: input
+  range about ±21 mV at the electrodes; the shorted-input noise is about
+  12 µV rms referred to the electrodes, not 23.
+- With the generator's low-impedance ground on CN1 2/5/6, the residual noise
+  was about 2 µV rms, against about 12 µV with only 4–5–6 shorted. That
+  supports common-mode pickup through EMG_REF's 1 MΩ as the main noise path.
+- Lesson: the scope's small-signal readings were unreliable (its noise, the
+  generator left in 50 Ω mode, RMS-Cycle at 20 Hz). Frequency response is
+  measured at a constant generator amplitude against the ADC alone.
 - Missed-sample rate at 400 kHz on the shield bus (ADR-0015).
 - The impedance table across loads and widths, and its repeatability.
 - That CMAP onset falls after the mux returns to EMG.

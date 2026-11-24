@@ -104,8 +104,11 @@ static void test_one_millivolt_at_electrodes_scales_through_the_front_end() {
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, -1.0f, electrode_mv(-code, kInternalRefV, kFrontEndGain));
 }
 
-static void test_full_scale_is_about_40_mv_at_the_electrodes() {
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 40.8f, electrode_mv(0x7FFFFF, kInternalRefV, kFrontEndGain));
+static void test_full_scale_is_about_21_mv_at_the_electrodes() {
+    // +/-2.048 V at the ADC over the measured gain of 97.5.
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 21.0f, electrode_mv(0x7FFFFF, kInternalRefV, kFrontEndGain));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 40.8f,
+                             electrode_mv(0x7FFFFF, kInternalRefV, kNominalFrontEndGain));
 }
 
 static void test_full_scale_codes_are_clipped() {
@@ -224,7 +227,7 @@ int main() {
     RUN_TEST(test_avdd_monitor_recovers_the_supply);
     RUN_TEST(test_zero_code_is_zero_millivolts);
     RUN_TEST(test_one_millivolt_at_electrodes_scales_through_the_front_end);
-    RUN_TEST(test_full_scale_is_about_40_mv_at_the_electrodes);
+    RUN_TEST(test_full_scale_is_about_21_mv_at_the_electrodes);
     RUN_TEST(test_full_scale_codes_are_clipped);
     RUN_TEST(test_emg_polling_needs_the_stream_speed);
     RUN_TEST(test_counter_advance_handles_duplicates_misses_and_wrap);

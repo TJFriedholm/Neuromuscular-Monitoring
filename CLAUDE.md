@@ -40,7 +40,8 @@ Do not change clinical behavior without either matching the spec or writing an A
   a second master on GPIO7/8. STIM_PULSE and STIM_OUTPUT_ENABLE on pins 35/37 =
   GPIO46/47 (to verify). Nothing comes back
   from the patient side except I²C: no DRDY, no fault line, no current readback.
-- EMG: AD8226 + OPA2197 front end (gain ≈ 50.2, 10.6 Hz HP, 408 Hz LP) into a TI
+- EMG: AD8226 + OPA2197 front end (gain **≈ 97.5 measured**, 50.2 on the
+  schematic; 10.6 Hz HP, 408 Hz LP, confirmed) into a TI
   **ADS122C04** — 24-bit, **I²C** (0x40), ≤ 2000 SPS. Inputs: AIN0 = ADC_SIGNAL,
   AIN1 = ISO_VCM, AIN2 = IMP_ADC_IN, AIN3 unconnected. EMG is AIN0 − AIN1 against
   the internal 2.048 V reference. DRDY not wired, so it is polled (ADR-0014).
@@ -53,6 +54,10 @@ Do not change clinical behavior without either matching the spec or writing an A
   pot's SHDN, forcing the command to 0 V).
 - **The +80 V rail is always on**; firmware cannot switch it. "Output disabled"
   (PULSE low, ENABLE low, pot at 0) replaces "HV off" (ADR-0011)
+- **GPIO46/47 need the P4's on-chip LDO VO4 on** (it powers the GPIO39–48
+  bank; the BSP only enables it for the SD card). Without it they cannot drive
+  high. Acquire VO4 at 3.3 V after setting both low (`board.hpp`). Never let an
+  SD driver drop it to 1.8 V
 - **No hardware pulse-width limit on the shield.** The bound is the ESP32's one-shot
   peripheral, backed by enabling output only during a sequence and by
   watchdogs (ADR-0012)
@@ -255,9 +260,10 @@ validated in MATLAB first, then ported to C++. MATLAB exports golden test vector
   - Signal quality indicator: required by §5.3.2/§5.3.3, undefined
   - PTC and DBS modes: required by §5.1.2, no algorithms specified
   - EMG DSP: 60 Hz notch + bandpass, MATLAB first
-  - EMG noise floor is 23–25 µV rms with inputs shorted, mostly non-mains tones
-    in band; cause not found, accepted for now (ADR-0014). Affects TOF ratio
-    precision (about ±10 % per twitch on a 1 mV T1)
+  - EMG noise floor is about 12 µV rms (at the measured gain) with inputs
+    shorted to EMG_REF, about 2 µV with them on ISO_GND: likely pickup through
+    EMG_REF's 1 MΩ. Accepted for now (ADR-0014)
+  - Front-end gain measured 2× the schematic: check R8, R10, R11 (ADR-0014)
   - UI: calibration progress page; alarm sound; volume reaches no hardware yet
     (brightness is wired in the demo, not yet confirmed on the panel)
   - On the board: touch orientation under rotation, tearing, GT911 address

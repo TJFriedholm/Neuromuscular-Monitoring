@@ -55,6 +55,31 @@ checking the first with the same silicon.
 - Rev 2 should add a hardware pulse-width limit (a monostable or RC-limited
   gate on the patient side) and then restore ADR-0001's original claim.
 
+## Bench results, 2026-11-24 (zero current)
+
+Stimulating bench build, pot code 0 (no current commanded), CN1 open; R&S RTB24
+on Waveshare header pin 35 (label "46", GPIO46), ground on a Waveshare GND pin.
+
+- **Width: 250.0032 µs** for a 250 µs request, 5 of 5 pulses identical
+  (standard deviation 0 at 1.25 GS/s). Height 3.26 V, low before and after.
+- **Train:** 4 pulses, first to fourth 1.504 s (cursor resolution at
+  500 ms/div is several ms; the firmware's tick gives 500 ms ± 1 ms per gap).
+- **No trigger on GPIO46 at 1.5 V** through 5 resets/power-ups (flashing,
+  RTS resets). GPIO47 not yet scoped.
+- **Found and fixed first:** GPIO46/47 sit in the GPIO39–48 bank, whose I/O
+  supply on this board comes from the P4's on-chip LDO VO4 (the BSP only turns
+  it on for the SD card). Without it the pins cannot drive high: a pulse
+  "fired" in firmware and nothing reached the pin. Firmware that drives these
+  lines must acquire VO4 at 3.3 V after setting both pins low
+  (`board.hpp`, `kStimIoLdoChannel`). Waveshare schematic not yet checked to
+  confirm VDDPST_5 is VO4.
+- `PulseGenerator::fire()` was fixed before this test: the RMT payload is a
+  member (not stack), and a completion timeout disables the channel, returns
+  the pin to plain GPIO driven low, and latches the generator off.
+
+Still to do: the 300 µs case and TP11 (delivered current, needs a load);
+GPIO47 (OUTPUT_ENABLE) on the scope through reset.
+
 ## To verify on the board
 
 - The reset state of the two PULSE / ENABLE GPIOs on the ESP32-P4 (GPIO46/47 if

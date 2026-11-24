@@ -35,6 +35,7 @@
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "esp_console.h"
+#include "esp_ldo_regulator.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -100,6 +101,18 @@ const char* reset_reason_name(esp_reset_reason_t r) {
         case ESP_RST_USB: return "USB";
         default: return "other";
     }
+}
+
+esp_ldo_channel_handle_t g_io_ldo = nullptr;
+
+// Powers the GPIO39-48 bank, which holds STIM_PULSE and STIM_OUTPUT_ENABLE
+// (board.hpp, kStimIoLdoChannel). Called after both pins are set to drive
+// low, so they come up low.
+esp_err_t power_stim_io_bank() {
+    esp_ldo_channel_config_t c{};
+    c.chan_id = kStimIoLdoChannel;
+    c.voltage_mv = kStimIoLdoMv;
+    return esp_ldo_acquire_channel(&c, &g_io_ldo);
 }
 
 // Drives a pin low as an output: level first, then direction, so it never
@@ -752,6 +765,8 @@ extern "C" void app_main() {
     hold_low(kStimPulseGpio);
     hold_low(kStimOutputEnableGpio);
 #endif
+    // Only now power the pins' I/O bank, with both already set to drive low.
+    const esp_err_t io_err = power_stim_io_bank();
 
     // Two buses (ADR-0015). The bench does not link the BSP, so it creates the
     // board bus itself on the BSP's port and pins, for scanning only.
@@ -782,6 +797,8 @@ extern "C" void app_main() {
     std::printf(" HV rails are always on while the shield is powered.\n");
     std::printf("==============================================================\n");
     std::printf("reset reason: %s\n", reset_reason_name(esp_reset_reason()));
+    std::printf("stim I/O bank (LDO VO%d, %d mV): %s\n", kStimIoLdoChannel, kStimIoLdoMv,
+                esp_err_to_name(io_err));
     std::printf("pins: STIM_PULSE GPIO%d (J1 35), STIM_OUTPUT_ENABLE GPIO%d (J1 37)\n",
                 kStimPulseGpio, kStimOutputEnableGpio);
     std::printf("      shield I2C SDA GPIO%d, SCL GPIO%d, %" PRIu32 " Hz for bring-up\n",

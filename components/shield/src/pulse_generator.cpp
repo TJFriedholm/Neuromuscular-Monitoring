@@ -1,6 +1,9 @@
 #include "shield/pulse_generator.hpp"
 
+#include "driver/gpio.h"
+#include "esp_rom_gpio.h"
 #include "hal/stimulator.hpp"
+#include "soc/gpio_sig_map.h"
 
 namespace shield {
 
@@ -44,27 +47,49 @@ esp_err_t PulseGenerator::init() {
     return rmt_enable(channel_);
 }
 
+void PulseGenerator::force_low() {
+    if (channel_ != nullptr) {
+        rmt_disable(channel_);  // aborts a transaction still in progress
+    }
+    // Route the pin back to the plain GPIO output and drive it low, so its
+    // level no longer depends on the RMT at all.
+    const auto pin = static_cast<gpio_num_t>(gpio_);
+    gpio_set_level(pin, 0);
+    esp_rom_gpio_connect_out_signal(gpio_, SIG_GPIO_OUT_IDX, false, false);
+    gpio_set_direction(pin, GPIO_MODE_OUTPUT);
+    gpio_set_level(pin, 0);
+}
+
 esp_err_t PulseGenerator::fire(std::uint32_t width_us) {
-    if (channel_ == nullptr) {
+    if (channel_ == nullptr || failed_) {
         return ESP_ERR_INVALID_STATE;
     }
     if (width_us < hal::kPulseWidthMinUs || width_us > hal::kPulseWidthMaxUs) {
         return ESP_ERR_INVALID_ARG;
     }
-    rmt_symbol_word_t symbol{};
-    symbol.level0 = 1;
-    symbol.duration0 = width_us;
-    symbol.level1 = 0;
-    symbol.duration1 = 10;
+    symbol_ = rmt_symbol_word_t{};
+    symbol_.level0 = 1;
+    symbol_.duration0 = width_us;
+    symbol_.level1 = 0;
+    symbol_.duration1 = 10;
 
     rmt_transmit_config_t tc{};
     tc.loop_count = 0;     // play once. -1 would repeat forever: never use it here.
     tc.flags.eot_level = 0;  // and leave the pin low afterwards
-    esp_err_t err = rmt_transmit(channel_, encoder_, &symbol, sizeof symbol, &tc);
+    esp_err_t err = rmt_transmit(channel_, encoder_, &symbol_, sizeof symbol_, &tc);
     if (err != ESP_OK) {
+        failed_ = true;
+        force_low();
         return err;
     }
-    return rmt_tx_wait_all_done(channel_, kWaitMs);
+    err = rmt_tx_wait_all_done(channel_, kWaitMs);
+    if (err != ESP_OK) {
+        // Not finished in 5 ms for a <= 300 us pulse: the peripheral is not
+        // doing what we asked. Stop it and never use it again this boot.
+        failed_ = true;
+        force_low();
+    }
+    return err;
 }
 
 }  // namespace shield

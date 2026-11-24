@@ -29,10 +29,23 @@ class PulseGenerator {
     // Plays one high pulse of width_us and waits (<= 5 ms) for it to finish.
     // Widths outside the spec's 200-300 us are refused here as well as in the
     // stimulator, so this class cannot be misused on its own.
+    //
+    // If the pulse has not finished in time, the RMT channel is disabled, the
+    // pin is taken back from the RMT and driven low by plain GPIO, and the
+    // generator latches: every later fire() fails until a reset. The caller
+    // (ShieldStimulator) also trips, which drops OUTPUT_ENABLE, forcing the
+    // command to 0 V even if this pin were stuck high (ADR-0011).
     esp_err_t fire(std::uint32_t width_us);
+    bool failed() const { return failed_; }
 
   private:
+    void force_low();
+
     int gpio_;
+    bool failed_ = false;
+    // The RMT reads the pulse from memory during the transmission, so it lives
+    // here, not on fire()'s stack.
+    rmt_symbol_word_t symbol_{};
     rmt_channel_handle_t channel_ = nullptr;
     rmt_encoder_handle_t encoder_ = nullptr;
 };
