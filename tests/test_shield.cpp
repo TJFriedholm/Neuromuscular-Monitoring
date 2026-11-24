@@ -8,6 +8,7 @@
 #include "shield/amplitude_table.hpp"
 #include "shield/board.hpp"
 #include "shield/sample_math.hpp"
+#include "hal/stimulator.hpp"
 #include "unity.h"
 
 using namespace shield;
@@ -26,21 +27,23 @@ static void test_register_commands_carry_the_register_number() {
 }
 
 static void test_emg_sampling_config_encodes_as_expected() {
-    // AIN0 single-ended, gain 1, PGA bypassed, 1000 SPS x turbo = 2000 SPS,
-    // continuous, AVDD reference, data counter on.
+    // AIN0-AIN1 differential, gain 1, PGA bypassed, 1000 SPS x turbo =
+    // 2000 SPS, continuous, internal 2.048 V reference, data counter on.
     Config c;
     TEST_ASSERT_TRUE(valid(c));
-    TEST_ASSERT_EQUAL_HEX8(0x81, reg0(c));
-    TEST_ASSERT_EQUAL_HEX8(0xDC, reg1(c));
+    TEST_ASSERT_TRUE(c.mux == kEmgMux);
+    TEST_ASSERT_EQUAL_HEX8(0x01, reg0(c));
+    TEST_ASSERT_EQUAL_HEX8(0xD8, reg1(c));
     TEST_ASSERT_EQUAL_HEX8(0x40, reg2(c));
     TEST_ASSERT_EQUAL_HEX8(0x00, reg3(c));
     TEST_ASSERT_EQUAL_FLOAT(2000.0f, samples_per_second(c.rate, c.turbo));
 }
 
-static void test_impedance_input_is_ain3_to_avss() {
+static void test_impedance_input_is_ain2_to_avss() {
     Config c;
     c.mux = single_ended(kImpedanceAdcInput);
-    TEST_ASSERT_EQUAL_HEX8(0xB1, reg0(c));
+    TEST_ASSERT_EQUAL_HEX8(0xA1, reg0(c));
+    TEST_ASSERT_TRUE(kImpedanceAdcInput != kUnconnectedAdcInput);
 }
 
 static void test_single_shot_internal_reference_config() {
@@ -88,15 +91,38 @@ static void test_avdd_monitor_recovers_the_supply() {
 
 // --- EMG scaling and sample counter ---
 
-static void test_mid_scale_is_zero_millivolts() {
-    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 0.0f, electrode_mv(4194304, 5.0f, kFrontEndGain));
+static void test_zero_code_is_zero_millivolts() {
+    // Differential against ISO_VCM: no midpoint to subtract.
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, electrode_mv(0, kInternalRefV, kFrontEndGain));
 }
 
 static void test_one_millivolt_at_electrodes_scales_through_the_front_end() {
-    // 1 mV at the electrodes -> 1 mV x 50.2 at the ADC, on top of 2.5 V.
-    const double v_adc = 2.5 + 0.001 * static_cast<double>(kFrontEndGain);
-    const auto code = static_cast<std::int32_t>(v_adc / 5.0 * 8388608.0);
-    TEST_ASSERT_FLOAT_WITHIN(1e-3f, 1.0f, electrode_mv(code, 5.0f, kFrontEndGain));
+    // 1 mV at the electrodes -> 1 mV x 50.2 between AIN0 and AIN1.
+    const double v_adc = 0.001 * static_cast<double>(kFrontEndGain);
+    const auto code = static_cast<std::int32_t>(v_adc / 2.048 * 8388608.0);
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, 1.0f, electrode_mv(code, kInternalRefV, kFrontEndGain));
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, -1.0f, electrode_mv(-code, kInternalRefV, kFrontEndGain));
+}
+
+static void test_full_scale_is_about_40_mv_at_the_electrodes() {
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 40.8f, electrode_mv(0x7FFFFF, kInternalRefV, kFrontEndGain));
+}
+
+static void test_full_scale_codes_are_clipped() {
+    TEST_ASSERT_TRUE(is_clipped(sign_extend_24(0x7F, 0xFF, 0xFF)));
+    TEST_ASSERT_TRUE(is_clipped(sign_extend_24(0x80, 0x00, 0x00)));
+    TEST_ASSERT_FALSE(is_clipped(sign_extend_24(0x7F, 0xFF, 0xFE)));
+    TEST_ASSERT_FALSE(is_clipped(sign_extend_24(0x80, 0x00, 0x01)));
+    TEST_ASSERT_FALSE(is_clipped(sign_extend_24(0xFF, 0xFF, 0xFF)));
+    TEST_ASSERT_FALSE(is_clipped(0));
+}
+
+static void test_emg_polling_needs_the_stream_speed() {
+    // A 400 us poll (2500 Hz) fits at 400 kHz, not at the 100 kHz bring-up speed.
+    TEST_ASSERT_TRUE(polling_fits(kI2cStreamHz, 400));
+    TEST_ASSERT_FALSE(polling_fits(kI2cBringupHz, 400));
+    TEST_ASSERT_FALSE(polling_fits(0, 400));
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, 165.0f, rdata_transaction_us(400000));
 }
 
 static void test_counter_advance_handles_duplicates_misses_and_wrap() {
@@ -162,20 +188,45 @@ static void test_malformed_tables_are_invalid() {
 
 static void test_stim_out_divider_matches_schematic() {
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, 0.02166f, kStimOutDivider);
+    // +80 V at STIM_OUT -> ~1.73 V at IMP_SENSE, inside the 2.048 V reference.
+    TEST_ASSERT_FLOAT_WITHIN(1e-2f, 1.733f, 80.0f * kStimOutDivider);
+    TEST_ASSERT_TRUE(80.0f * kStimOutDivider < kInternalRefV);
+}
+
+static void test_adc_address_collides_with_the_board_bus_but_pot_does_not() {
+    // ADR-0015: why the shield has its own bus.
+    TEST_ASSERT_TRUE(on_board_bus(kAdcAddress));
+    TEST_ASSERT_EQUAL_HEX8(kEs7210Address, kAdcAddress);
+    TEST_ASSERT_FALSE(on_board_bus(kPotAddress));
+    TEST_ASSERT_TRUE(kShieldI2cPort != kBoardI2cPort);
+    TEST_ASSERT_TRUE(kShieldI2cSdaGpio != kBoardI2cSdaGpio);
+    TEST_ASSERT_TRUE(kShieldI2cSclGpio != kBoardI2cSclGpio);
+}
+
+static void test_nominal_current_and_bench_cap() {
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, nominal_ma_for_code(0));
+    // Full-scale ideal command is ~60 mA: twice the board's 30 mA target.
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, 60.0f, nominal_ma_for_code(255));
+    // The bench cap stays well under the 30 mA maximum.
+    TEST_ASSERT_TRUE(nominal_ma_for_code(kBenchMaxPulseCode) < 5.0f);
+    TEST_ASSERT_TRUE(nominal_ma_for_code(kBenchMaxPulseCode) < hal::kCurrentMaxMa);
 }
 
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_register_commands_carry_the_register_number);
     RUN_TEST(test_emg_sampling_config_encodes_as_expected);
-    RUN_TEST(test_impedance_input_is_ain3_to_avss);
+    RUN_TEST(test_impedance_input_is_ain2_to_avss);
     RUN_TEST(test_single_shot_internal_reference_config);
     RUN_TEST(test_forbidden_configs_are_rejected);
     RUN_TEST(test_24_bit_codes_sign_extend);
     RUN_TEST(test_half_scale_code_is_half_the_reference);
     RUN_TEST(test_avdd_monitor_recovers_the_supply);
-    RUN_TEST(test_mid_scale_is_zero_millivolts);
+    RUN_TEST(test_zero_code_is_zero_millivolts);
     RUN_TEST(test_one_millivolt_at_electrodes_scales_through_the_front_end);
+    RUN_TEST(test_full_scale_is_about_40_mv_at_the_electrodes);
+    RUN_TEST(test_full_scale_codes_are_clipped);
+    RUN_TEST(test_emg_polling_needs_the_stream_speed);
     RUN_TEST(test_counter_advance_handles_duplicates_misses_and_wrap);
     RUN_TEST(test_pot_instruction_bytes);
     RUN_TEST(test_pot_wiper_voltage);
@@ -183,5 +234,7 @@ int main() {
     RUN_TEST(test_table_never_extrapolates);
     RUN_TEST(test_malformed_tables_are_invalid);
     RUN_TEST(test_stim_out_divider_matches_schematic);
+    RUN_TEST(test_adc_address_collides_with_the_board_bus_but_pot_does_not);
+    RUN_TEST(test_nominal_current_and_bench_cap);
     return UNITY_END();
 }

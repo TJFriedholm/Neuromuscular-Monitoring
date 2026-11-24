@@ -1,6 +1,7 @@
 # Touch, audio and the shield share one I²C bus
 
-**Status:** accepted
+**Status:** superseded by ADR-0015 (2026-11-24): the ES7210 microphone ADC is
+also on this bus at 0x40, the ADS122C04's address
 **Relates to:** ADR-0007 (touch must be confirmed or the device does not stimulate),
 ADR-0010
 

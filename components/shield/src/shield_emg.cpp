@@ -21,8 +21,8 @@ constexpr float kAvddMinV = 4.5f;
 constexpr float kAvddMaxV = 5.5f;
 }  // namespace
 
-ShieldEmg::ShieldEmg(Ads122c04& adc, i2c_master_bus_handle_t bus, int ain, float front_end_gain)
-    : adc_(adc), bus_(bus), ain_(ain), gain_(front_end_gain), ring_(kRingSamples, 0.0f) {
+ShieldEmg::ShieldEmg(Ads122c04& adc, i2c_master_bus_handle_t bus, Mux mux, float front_end_gain)
+    : adc_(adc), bus_(bus), mux_(mux), gain_(front_end_gain), ring_(kRingSamples, 0.0f) {
     exited_ = xSemaphoreCreateBinary();
 }
 
@@ -101,6 +101,9 @@ void ShieldEmg::run() {
             push(std::numeric_limits<float>::quiet_NaN());
         }
         stats_.missed += static_cast<std::uint32_t>(advance - 1);
+        if (is_clipped(code)) {
+            ++stats_.clipped;
+        }
         push(electrode_mv(code, vref_v_, gain_));
         ++stats_.fresh;
         ++window_fresh;
@@ -122,30 +125,34 @@ bool ShieldEmg::start() {
         return true;
     }
     error_ = false;
+    start_error_ = EmgStartError::None;
 
-    // Measure AVDD against the internal reference, so mV values use the real
-    // supply rather than a nominal 5 V.
+    if (!polling_fits(adc_.scl_hz(), kPollPeriodUs)) {
+        start_error_ = EmgStartError::BusTooSlow;
+        return false;
+    }
+
+    // AVDD (ISO_5V) powers the front end and sets ISO_VCM. Out of range means
+    // the analog side is not working, whatever the ADC reads.
     std::int32_t monitor = 0;
     if (adc_.read_single(Mux::AvddMonitor, Vref::Internal2048, &monitor) != ESP_OK) {
         error_ = true;
+        start_error_ = EmgStartError::AdcNoAnswer;
         return false;
     }
     const float avdd = avdd_from_monitor(monitor);
     if (!(avdd >= kAvddMinV && avdd <= kAvddMaxV)) {
         error_ = true;
+        start_error_ = EmgStartError::AvddOutOfRange;
         return false;
     }
-    vref_v_ = avdd;
 
-    Config c;
-    c.mux = single_ended(ain_);
-    c.rate = DataRate::Dr1000;
-    c.turbo = true;  // 2000 SPS
-    c.continuous = true;
-    c.vref = Vref::AnalogSupply;
-    c.data_counter = true;
+    Config c;  // defaults are the EMG configuration
+    c.mux = mux_;
+    vref_v_ = kInternalRefV;
     if (adc_.configure(c) != ESP_OK || adc_.start() != ESP_OK) {
         error_ = true;
+        start_error_ = EmgStartError::ConfigFailed;
         return false;
     }
 
@@ -153,6 +160,7 @@ bool ShieldEmg::start() {
         std::lock_guard<std::mutex> lock(mutex_);
         total_ = 0;
         stats_ = EmgStats{};
+        stats_.avdd_v = avdd;
         stats_.vref_v = vref_v_;
     }
 
@@ -161,6 +169,7 @@ bool ShieldEmg::start() {
                                 1) != pdPASS) {
         running_ = false;
         task_ = nullptr;
+        start_error_ = EmgStartError::NoResources;
         return false;
     }
 
@@ -180,6 +189,7 @@ bool ShieldEmg::start() {
         gptimer_start(timer_) != ESP_OK) {
         stop();
         error_ = true;
+        start_error_ = EmgStartError::NoResources;
         return false;
     }
     return true;

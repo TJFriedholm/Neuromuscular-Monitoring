@@ -58,7 +58,7 @@ constexpr Mux single_ended(int ain) {
 enum class Vref : std::uint8_t {
     Internal2048 = 0x0,  // 2.048 V
     External = 0x1,      // REFP/REFN: not wired on shield V1.0
-    AnalogSupply = 0x2,  // AVDD - AVSS (ISO_5V); ratiometric with ISO_VCM
+    AnalogSupply = 0x2,  // AVDD - AVSS (ISO_5V); for DC checks of 0-5 V inputs
 };
 
 // Data rate code DR[2:0]. Normal mode rates are 20, 45, 90, 175, 330, 600,
@@ -73,18 +73,21 @@ enum class DataRate : std::uint8_t {
     Dr1000 = 6,
 };
 
+// Defaults are the EMG sampling configuration (ADR-0014).
 struct Config {
-    Mux mux = Mux::Ain0Avss;
+    Mux mux = Mux::Ain0Ain1;  // ADC_SIGNAL - ISO_VCM
     // Gain 1, 2, 4, ... 128 as GAIN[2:0] = log2(gain). Only 1, 2, 4 are valid
     // with the PGA bypassed.
     std::uint8_t gain_log2 = 0;
     // Bypass the PGA. Required for single-ended inputs referred to AVSS, which
-    // would otherwise sit outside the PGA's common-mode range.
+    // would otherwise sit outside the PGA's common-mode range. Also used for
+    // EMG, so a stimulus artifact near the rails cannot overdrive the PGA.
     bool pga_bypass = true;
     DataRate rate = DataRate::Dr1000;
     bool turbo = true;
     bool continuous = true;
-    Vref vref = Vref::AnalogSupply;
+    // +/- 2.048 V differential: about +/- 40 mV at the electrodes.
+    Vref vref = Vref::Internal2048;
     // Prefix each result with an 8-bit conversion counter. This is how the
     // driver tells new data from data it has already read, and counts missed
     // conversions, with one transaction per poll (DRDY is not wired, ADR-0014).

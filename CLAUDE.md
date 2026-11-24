@@ -31,15 +31,20 @@ Do not change clinical behavior without either matching the spec or writing an A
   - ESP32-C6 Wi-Fi co-processor: never started; `esp_hosted` is not linked (ADR-0007)
 - Shield: **NME_Shield_Board V1.0** (EasyEDA). **The hardware is frozen for this
   build**: it differs from the spec's parts, and every difference is an ADR
-  (0010–0014), never a hardware change. Hardware fixes go under "Rev 2".
-- Host connection: Waveshare 40-pin header (J1). I²C on pins 4/6 = GPIO7/8,
-  **the same bus as GT911 touch (0x5D/0x14) and the ES8311 codec (0x18)**; use the
-  BSP's bus handle, never a second master (ADR-0013). STIM_PULSE and
-  STIM_OUTPUT_ENABLE on pins 35/37 = GPIO46/47 (to verify). Nothing comes back
+  (0010–0015), never a hardware change. Hardware fixes go under "Rev 2".
+- Host connection: Waveshare 40-pin header (J1). **The shield's I²C is on its own
+  bus**: its SDA/SCL are wired to header pins 16/20 = **GPIO28/29**, I²C port 0,
+  not to pins 4/6 (ADR-0015). Pins 4/6 = GPIO7/8 are the BSP's bus (port 1):
+  GT911 touch (0x5D/0x14), ES8311 (0x18) and the **ES7210 microphone ADC at
+  0x40, the ADS122C04's address**. Use `bsp_i2c_get_handle()` for that bus, never
+  a second master on GPIO7/8. STIM_PULSE and STIM_OUTPUT_ENABLE on pins 35/37 =
+  GPIO46/47 (to verify). Nothing comes back
   from the patient side except I²C: no DRDY, no fault line, no current readback.
 - EMG: AD8226 + OPA2197 front end (gain ≈ 50.2, 10.6 Hz HP, 408 Hz LP) into a TI
-  **ADS122C04** — 24-bit, **I²C** (0x40, to verify), ≤ 2000 SPS, one EMG input.
-  DRDY not wired, so it is polled (ADR-0014)
+  **ADS122C04** — 24-bit, **I²C** (0x40), ≤ 2000 SPS. Inputs: AIN0 = ADC_SIGNAL,
+  AIN1 = ISO_VCM, AIN2 = IMP_ADC_IN, AIN3 unconnected. EMG is AIN0 − AIN1 against
+  the internal 2.048 V reference. DRDY not wired, so it is polled (ADR-0014).
+  An ACK at 0x40 is not identity: `Ads122c04::reset()` checks the registers
 - Stimulator: **AD5241** digital pot over I²C (0x2C, to verify) sets the amplitude
   command; **TS5A3159** switch gated by STIM_PULSE; **PA441** improved-Howland
   current source on +80 V (LT8365) and −15 V (MC34063). **0–30 mA** (spec says 60;
@@ -54,7 +59,7 @@ Do not change clinical behavior without either matching the spec or writing an A
 - Isolation: ISO1640 (I²C) + ISO7720**F** (PULSE, ENABLE; default-low outputs);
   REC5A-0505SW/H2 makes ISO_5V, 2 kVDC functional isolation only
 - Impedance: no lead-off detection. Estimated from STIM_OUT (divider into ADC
-  AIN3) and the commanded current, once per train, **stimulating electrodes only**
+  AIN2) and the commanded current, once per train, **stimulating electrodes only**
   (ADR-0014, proposed). Window 500 Ω – 50 kΩ; the source saturates above ≈ 2.6 kΩ
   at 30 mA
 - WiFi/BLE are disabled during stimulation and recording (§5.6.5)
@@ -187,18 +192,28 @@ and must stop being so before any driver that stimulates is linked, so it sets
 `EXCLUDE_COMPONENTS shield`. The bench keys (B, I, F, A) are typed into the
 serial monitor.
 
-`bench/` is where the shield drivers run. It stimulates: **resistive dummy loads
-on CN1 only, never a person.** Type `help` at the `bench>` prompt; the
-bring-up order is in the header of `bench/main/bench_main.cpp`.
+`bench/` is where the shield drivers run. Type `help` at the `bench>` prompt;
+the bring-up order is in the header of `bench/main/bench_main.cpp`. It has two
+builds:
+
+- **Default: no stimulation.** STIM_PULSE and STIM_OUTPUT_ENABLE are plain GPIOs
+  held low, and the pulse generator is not linked. Scans, ADC and pot register
+  tests, EMG sampling.
+- **Stimulating, opt-in**: `-DNMT_BENCH_STIM=ON`, and CMake refuses it in any
+  build directory but `bench/build-stim`. Adds `pulse`, `train`, `imp`, with pot
+  codes capped at `kBenchMaxPulseCode` (≈ 5 mA nominal) until a measured table
+  exists. **Resistive dummy loads on CN1 only, never a person.**
 
 ```
-idf.py -C bench build
+idf.py -C bench build                                   # no-stim
 idf.py -C bench -p /dev/cu.usbmodem5C931595651 flash monitor
+idf.py -C bench -B bench/build-stim -DNMT_BENCH_STIM=ON build   # stimulating
 ```
 
-It creates the I²C bus itself (same port, pins and settings as the BSP), because
-it does not link the BSP. The device build must use `bsp_i2c_get_handle()`
-instead (ADR-0013).
+It creates both I²C buses itself because it does not link the BSP: the board
+bus on GPIO7/8 (for scanning only) and the shield bus on GPIO28/29. It sends
+nothing to the ADC until `adc_reset` passes. Bring-up runs at 100 kHz;
+`emg_start` moves the ADC to 400 kHz, which 2000 SPS needs.
 
 Settings live in `firmware/sdkconfig.defaults` (LVGL's equivalent of
 `sim/lv_conf.h`; keep the two in step). `sdkconfig` is generated and ignored:
@@ -230,7 +245,7 @@ validated in MATLAB first, then ported to C++. MATLAB exports golden test vector
 
 - Done: `tof`, `calib`, `correction`, `safety` (fault latch + TOF state machine),
   `nmt_hal` interfaces, `hal_mock`, `ui` (Monitor, Signal, Menu and settings
-  pages, keypad entry, Fault), SDL simulator. 120 host unit tests passing.
+  pages, keypad entry, Fault), SDL simulator. 125 host unit tests passing.
   Demo firmware runs on the board (2026-10-26). Shield drivers and bench
   firmware written and built (2026-11-18), not yet run on the shield.
 - Open:
@@ -248,9 +263,12 @@ validated in MATLAB first, then ported to C++. MATLAB exports golden test vector
     (§5.2.1), whether IEC 60601-1-8 applies (ADR-0008)
   - Calibration still **clamps** a ×1.3 target above `i_max_ma` (30 mA); ADR-0010
     says it must fault instead. Needs a calib status, FaultCause and UI text.
-  - Shield bring-up with `bench/`: J1 pins/GPIOs, I²C addresses, which ADC input
-    carries ADC_SIGNAL, front-end gain, missed-sample rate, mA → pot table,
-    impedance table (ADR-0010–0014 "To verify")
+  - Shield bring-up with `bench/`: J1 pins/GPIOs, the GPIO28/29 jumper wiring,
+    I²C addresses and identity, ADC input mapping (`adc_inputs`), front-end gain, missed-sample rate, mA → pot table,
+    impedance table (ADR-0010–0015 "To verify")
+  - Shield hardware: one capacitor is under-rated for its voltage (user-reported
+    2026-11-24; which one is not recorded). The HV converters run whenever the
+    shield is powered, so it is stressed in no-stim tests too.
   - Not yet written: impedance driver (`IImpedance`) waits on the bench table;
     wiring the drivers into a device build waits on ADR-0006
 - Next: shield bring-up on the bench, remaining UI screens, CI

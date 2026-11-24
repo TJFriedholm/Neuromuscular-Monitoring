@@ -17,16 +17,30 @@ Ads122c04::~Ads122c04() {
     }
 }
 
-esp_err_t Ads122c04::init() {
+esp_err_t Ads122c04::add_device_locked() {
     i2c_device_config_t dc{};
     dc.dev_addr_length = I2C_ADDR_BIT_LEN_7;
     dc.device_address = address_;
     dc.scl_speed_hz = scl_hz_;
-    esp_err_t err = i2c_master_bus_add_device(bus_, &dc, &dev_);
-    if (err != ESP_OK) {
-        return err;
+    return i2c_master_bus_add_device(bus_, &dc, &dev_);
+}
+
+esp_err_t Ads122c04::init() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return add_device_locked();
+}
+
+esp_err_t Ads122c04::set_scl_hz(std::uint32_t scl_hz) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (dev_ != nullptr) {
+        const esp_err_t err = i2c_master_bus_rm_device(dev_);
+        if (err != ESP_OK) {
+            return err;
+        }
+        dev_ = nullptr;
     }
-    return reset();
+    scl_hz_ = scl_hz;
+    return add_device_locked();
 }
 
 esp_err_t Ads122c04::write_locked(const std::uint8_t* bytes, std::size_t n) {
@@ -36,12 +50,34 @@ esp_err_t Ads122c04::write_locked(const std::uint8_t* bytes, std::size_t n) {
 esp_err_t Ads122c04::reset() {
     std::lock_guard<std::mutex> lock(mutex_);
     const std::uint8_t cmd = kCmdReset;
-    const esp_err_t err = write_locked(&cmd, 1);
+    esp_err_t err = write_locked(&cmd, 1);
+    if (err != ESP_OK) {
+        return err;
+    }
     // The datasheet asks for a short wait (tens of us) after RESET; 2 ms is
     // generous and this is not on any time-critical path.
     vTaskDelay(pdMS_TO_TICKS(2));
+    for (std::uint8_t r = 0; r < 4; ++r) {
+        std::uint8_t got = 0;
+        err = read_register_locked(r, &got);
+        if (err != ESP_OK) {
+            return err;
+        }
+        const std::uint8_t mask = (r == 2) ? static_cast<std::uint8_t>(~kReg2DrdyBit) : 0xFF;
+        if ((got & mask) != 0) {
+            return ESP_ERR_INVALID_RESPONSE;
+        }
+    }
+    // The chip's power-on state, which is not the driver's default Config.
     cfg_ = Config{};
-    return err;
+    cfg_.mux = Mux::Ain0Ain1;
+    cfg_.pga_bypass = false;
+    cfg_.rate = DataRate::Dr20;
+    cfg_.turbo = false;
+    cfg_.continuous = false;
+    cfg_.vref = Vref::Internal2048;
+    cfg_.data_counter = false;
+    return ESP_OK;
 }
 
 esp_err_t Ads122c04::powerdown() {

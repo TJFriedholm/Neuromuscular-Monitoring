@@ -19,7 +19,7 @@ firmware follows the board and this ADR records the difference for Rev 2.
 | Pulse gate | 2N7002 pulse-enable | **TS5A3159** analog switch: `ISO_STIM_PULSE` connects `STIM_LEVEL` to `STIM_CMD` |
 | Current source | OPA2277 + IRF840, 0–60 mA | **PA441** improved-Howland source on +80 V (LT8365) and −15 V (MC34063); design target **30 mA** |
 | Isolation | ISO7762, 6 ch (SPI, PWM, enable, DRDY) | **ISO1640** (I²C) + **ISO7720F** (2 ch, host → patient side only) |
-| Impedance | ADS1299 lead-off | Divider on `STIM_OUT` (K ≈ 0.0217) into ADS122C04 AIN3 (see ADR-0014) |
+| Impedance | ADS1299 lead-off | Divider on `STIM_OUT` (K ≈ 0.0217) into ADS122C04 AIN2 (see ADR-0014) |
 
 The host connection is J1, the Waveshare 40-pin header:
 
@@ -27,8 +27,8 @@ The host connection is J1, the Waveshare 40-pin header:
 |---|---|---|---|
 | 1, 3 | HOST_5V | — | |
 | 2 | HOST_3V3 | — | |
-| 4 | HOST_I2C_SDA | GPIO7 | shared with GT911 touch and the ES8311 codec (ADR-0013) |
-| 6 | HOST_I2C_SCL | GPIO8 | |
+| 4 | HOST_I2C_SDA | GPIO7 → **GPIO28** | wired to header pin 16 instead; GPIO7/8 also carry the ES7210 at 0x40 (ADR-0015) |
+| 6 | HOST_I2C_SCL | GPIO8 → **GPIO29** | wired to header pin 20 instead (ADR-0015) |
 | 35 (to verify) | HOST_STIM_PULSE | GPIO46 (to verify) | |
 | 37 (to verify) | HOST_STIM_OUTPUT_ENABLE | GPIO47 (to verify) | |
 
@@ -90,8 +90,8 @@ board reports the shortfall directly.
   Waveshare lists pin 33 as GND. Check continuity before powering.
 - ADS122C04 address (A0/A1 appear tied to ISO_GND → 0x40) and AD5241 address
   (AD0/AD1 appear tied to ISO_GND → 0x2C). Scan the bus.
-- Which ADS122C04 input carries `ADC_SIGNAL` (AIN0 or AIN1), and the reference
-  (see ADR-0014).
+- ADS122C04 inputs as read from sheet 3: AIN0 = `ADC_SIGNAL`, AIN1 = `ISO_VCM`,
+  AIN2 = `IMP_ADC_IN`, AIN3 unconnected. Check with `adc_inputs` (ADR-0014).
 - How the shield mates: J1 is a male header and so is Waveshare's. Whatever
   cable or socket joins them must keep pin 1 on pin 1.
 - mA per AD5241 setting, across 500 Ω – 2.5 kΩ loads.

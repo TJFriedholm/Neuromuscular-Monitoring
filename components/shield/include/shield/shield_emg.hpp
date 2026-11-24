@@ -9,8 +9,11 @@
 // placeholders keep the timeline aligned. Sample spacing therefore follows the
 // ADC's clock, not the ESP32's.
 //
+// The input is differential, AIN0 (ADC_SIGNAL) - AIN1 (ISO_VCM), against the
+// ADC's internal 2.048 V reference (ADR-0014).
+//
 // A failed read gets one bus recovery attempt; a second consecutive failure
-// stops sampling and sets error() (ADR-0013).
+// stops sampling and sets error() (ADR-0015).
 
 #ifndef NMT_SHIELD_SHIELD_EMG_HPP
 #define NMT_SHIELD_SHIELD_EMG_HPP
@@ -35,14 +38,27 @@ struct EmgStats {
     std::uint32_t duplicates = 0;  // polls with no new conversion
     std::uint32_t missed = 0;      // conversions skipped over
     std::uint32_t bus_errors = 0;
+    std::uint32_t clipped = 0;     // fresh conversions at full scale
     float measured_sps = 0.0f;     // fresh conversions per second, last second
-    float vref_v = 0.0f;           // AVDD measured at start()
+    float avdd_v = 0.0f;           // ISO_5V measured at start(), a health check
+    float vref_v = 0.0f;           // reference used for scaling
+};
+
+// Why start() returned false.
+enum class EmgStartError {
+    None,
+    BusTooSlow,    // the ADC's SCL speed cannot keep up (polling_fits)
+    AdcNoAnswer,   // AVDD monitor read failed
+    AvddOutOfRange,
+    ConfigFailed,  // configure/readback or START failed
+    NoResources,   // task or timer
 };
 
 class ShieldEmg final : public hal::IEmg {
   public:
-    // `ain` is the single-ended ADC input carrying ADC_SIGNAL (0..3).
-    ShieldEmg(Ads122c04& adc, i2c_master_bus_handle_t bus, int ain, float front_end_gain);
+    // `mux` selects the EMG input (normally board.hpp's kEmgMux).
+    ShieldEmg(Ads122c04& adc, i2c_master_bus_handle_t bus, ads122c04::Mux mux,
+              float front_end_gain);
     ~ShieldEmg() override;
 
     // hal::IEmg
@@ -64,7 +80,7 @@ class ShieldEmg final : public hal::IEmg {
     bool running() const { return running_; }
     bool error() const { return error_; }
     EmgStats stats() const;
-    void set_input(int ain) { ain_ = ain; }
+    EmgStartError last_start_error() const { return start_error_; }
 
   private:
     static bool on_alarm(gptimer_handle_t, const gptimer_alarm_event_data_t*, void* arg);
@@ -74,9 +90,10 @@ class ShieldEmg final : public hal::IEmg {
 
     Ads122c04& adc_;
     i2c_master_bus_handle_t bus_;
-    int ain_;
+    ads122c04::Mux mux_;
     float gain_;
-    float vref_v_ = 5.0f;
+    float vref_v_ = ads122c04::kInternalRefV;
+    EmgStartError start_error_ = EmgStartError::None;
 
     gptimer_handle_t timer_ = nullptr;
     TaskHandle_t task_ = nullptr;

@@ -9,3 +9,4 @@ firmware/sdkconfig
 firmware/sdkconfig.old
 bench/sdkconfig
 bench/sdkconfig.old
+bench/build-stim/

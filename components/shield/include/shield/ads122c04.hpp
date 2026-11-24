@@ -1,4 +1,4 @@
-// ADS122C04 driver: 24-bit ADC on the shared I2C bus (ESP-IDF only).
+// ADS122C04 driver: 24-bit ADC on the shield's I2C bus (ESP-IDF only).
 //
 // Thin: it sends commands and moves bytes. Sampling at a fixed rate is
 // ShieldEmg's job. Calls are serialised by an internal mutex, so a
@@ -23,9 +23,18 @@ class Ads122c04 {
     Ads122c04(const Ads122c04&) = delete;
     Ads122c04& operator=(const Ads122c04&) = delete;
 
-    // Adds the device to the bus and resets it.
+    // Adds the device to the bus. Sends nothing: call reset() once the bus has
+    // been scanned and the address is known to be this chip's (ADR-0015).
     esp_err_t init();
 
+    // Re-adds the device at a new SCL speed (ESP-IDF fixes speed per device).
+    esp_err_t set_scl_hz(std::uint32_t scl_hz);
+    std::uint32_t scl_hz() const { return scl_hz_; }
+
+    // RESET command (addressed, not the I2C general call), then checks that all
+    // four registers read back as their power-on value of 0 (DRDY masked).
+    // ESP_ERR_INVALID_RESPONSE otherwise: something other than an ADS122C04,
+    // or a second device, answered.
     esp_err_t reset();
     esp_err_t powerdown();
     // Starts a single-shot conversion, or continuous conversions.
@@ -50,6 +59,7 @@ class Ads122c04 {
     esp_err_t read_single(ads122c04::Mux mux, ads122c04::Vref vref, std::int32_t* code);
 
   private:
+    esp_err_t add_device_locked();
     esp_err_t write_locked(const std::uint8_t* bytes, std::size_t n);
     esp_err_t configure_locked(const ads122c04::Config& cfg);
     esp_err_t read_register_locked(std::uint8_t reg, std::uint8_t* value);
